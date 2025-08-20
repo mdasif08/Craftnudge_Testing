@@ -1,0 +1,2 @@
+# This file ensures the data/behaviors directory is tracked by Git
+# The commits.jsonl file will be created automatically when commits are tracked
