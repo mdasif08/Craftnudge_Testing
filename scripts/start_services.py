@@ -248,6 +248,7 @@ class ServiceManager:
             'commit-tracker',
             'ai-analysis',
             'github-webhook',
+            'commit-quality-coaching',
             'frontend'
         ]
         

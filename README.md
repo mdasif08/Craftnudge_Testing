@@ -19,6 +19,7 @@ graph TB
     subgraph "Event-Driven Microservices"
         CT[Commit Tracker<br/>Service]
         AI[AI Analysis<br/>Service]
+        CQC[Commit Quality<br/>Coaching Service]
         DB[Database<br/>Service]
         FE[Frontend<br/>Service]
         GW[GitHub Webhook<br/>Service]
@@ -35,13 +36,17 @@ graph TB
     GW --> RB
     CT --> RB
     RB --> AI
+    RB --> CQC
     RB --> DB
     AI --> OLL
     AI --> RB
+    CQC --> OLL
+    CQC --> RB
     DB --> PG
     FE --> CT
     FE --> DB
     FE --> AI
+    FE --> CQC
     
     RB --> MON
     RB --> LOG
@@ -136,6 +141,102 @@ python track_commit.py --repo-path /path/to/repo
 python track_commit.py --show-latest
 ```
 
+## 🎯 Commit Quality Coaching Service
+
+### Overview
+
+The **Commit Quality Coaching Service** provides AI-powered feedback and coaching to help developers improve their commit quality and coding practices. It analyzes commit patterns, provides personalized recommendations, and tracks user progress over time.
+
+### Features
+
+- **AI-Powered Analysis**: Uses Ollama to analyze commit quality based on message clarity, file changes, and code patterns
+- **Personalized Feedback**: Generates specific recommendations for improvement
+- **Progress Tracking**: Monitors user improvement over time with detailed insights
+- **Coaching Sessions**: Interactive coaching with contextual advice
+- **Quality Scoring**: 10-point quality assessment with detailed breakdown
+
+### Usage Examples
+
+```bash
+# Get coaching feedback for a specific commit
+python coach_commit.py --commit-id abc123 --user-id developer1
+
+# View user progress over time
+python coach_commit.py progress --user-id developer1 --days 30
+
+# Get AI-generated insights
+python coach_commit.py insights --user-id developer1
+
+# Start a coaching session
+python coach_commit.py session --user-id developer1
+```
+
+### API Endpoints
+
+```bash
+# Get coaching feedback
+POST /coach/commit
+{
+  "commit_id": "abc123def456",
+  "user_id": "developer1",
+  "include_context": true
+}
+
+# Get user progress
+GET /coach/progress/{user_id}?days=30
+
+# Get coaching insights
+GET /coach/insights/{user_id}
+
+# Start coaching session
+POST /coach/session/start
+{
+  "user_id": "developer1",
+  "session_type": "commit_quality"
+}
+```
+
+### Quality Assessment Criteria
+
+| Aspect | Weight | Description |
+|--------|--------|-------------|
+| **Message Quality** | 40% | Clarity, descriptiveness, conventional format |
+| **File Changes** | 30% | Logical grouping, appropriate scope |
+| **Code Quality** | 20% | Size, complexity, best practices |
+| **Context** | 10% | Historical patterns, team consistency |
+
+### Coaching Feedback Example
+
+```json
+{
+  "commit_id": "abc123def456",
+  "user_id": "developer1",
+  "quality_score": 8.5,
+  "quality_level": "EXCELLENT",
+  "strengths": [
+    "Clear and descriptive commit message",
+    "Logical file organization",
+    "Appropriate commit size"
+  ],
+  "areas_for_improvement": [
+    "Consider adding more context about the business impact",
+    "Review test coverage for new functionality"
+  ],
+  "specific_recommendations": [
+    "Use conventional commit format: feat(auth): add OAuth2 authentication",
+    "Add integration tests for the new authentication flow"
+  ],
+  "coaching_tips": [
+    "Great job on the descriptive message! Consider mentioning the user story or ticket number.",
+    "The commit size is perfect - not too large, not too small."
+  ],
+  "next_steps": [
+    "Review the authentication documentation",
+    "Plan follow-up commits for error handling improvements"
+  ]
+}
+```
+
 ## 🏛️ Architecture Deep Dive
 
 ### Event-Driven Design
@@ -154,6 +255,7 @@ CommitEvent → Redis → AI Analysis → Database → Frontend
 | Database | 8003 | Data persistence | Redis, PostgreSQL |
 | Frontend | 8000 | Web interface | All services |
 | GitHub Webhook | 8004 | GitHub integration | Redis |
+| Commit Quality Coaching | 8005 | AI-powered coaching | Redis, Ollama |
 
 ### Data Flow
 
@@ -217,6 +319,8 @@ services:
 curl http://localhost:8001/health
 curl http://localhost:8002/health
 curl http://localhost:8003/health
+curl http://localhost:8004/health
+curl http://localhost:8005/health
 
 # System health
 curl http://localhost:8000/health
@@ -248,8 +352,9 @@ docker-compose logs -f elasticsearch kibana
 pytest
 
 # Run specific service tests
-pytest tests/services/test_commit_tracker.py
-pytest tests/services/test_ai_analysis.py
+pytest tests/test_commit_tracker.py
+pytest tests/test_ai_analysis.py
+pytest tests/test_commit_quality_coaching.py
 
 # Coverage report
 pytest --cov=services --cov-report=html
