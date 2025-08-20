@@ -92,6 +92,14 @@ class ServiceManager:
                 'command': ['python', '-m', 'services.github_webhook.main'],
                 'process': None,
                 'status': 'stopped'
+            },
+            'commit-quality-coaching': {
+                'name': 'Commit Quality Coaching Service',
+                'port': settings.service.commit_quality_coaching_port,
+                'health_url': f'http://localhost:{settings.service.commit_quality_coaching_port}/health',
+                'command': ['python', '-m', 'services.commit_quality_coaching.main'],
+                'process': None,
+                'status': 'stopped'
             }
         }
         self.running = False

@@ -200,3 +200,25 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
 
 # GitHub webhook command
 CMD ["python", "-m", "uvicorn", "services.github_webhook.main:app", "--host", "0.0.0.0", "--port", "8004"]
+
+FROM base as commit-quality-coaching
+
+# Copy application code
+COPY . .
+
+# Create necessary directories
+RUN mkdir -p /app/data/behaviors && \
+    chown -R appuser:appuser /app
+
+# Switch to non-root user
+USER appuser
+
+# Expose port
+EXPOSE 8005
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:8005/health || exit 1
+
+# Commit quality coaching command
+CMD ["python", "-m", "uvicorn", "services.commit_quality_coaching.main:app", "--host", "0.0.0.0", "--port", "8005"]

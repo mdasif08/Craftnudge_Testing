@@ -40,6 +40,13 @@ class EventType(Enum):
     BEHAVIOR_INSIGHT_GENERATED = "behavior.insight_generated"
     BEHAVIOR_RECOMMENDATION_CREATED = "behavior.recommendation_created"
     
+    # Coaching events
+    COACHING_FEEDBACK_GENERATED = "coaching.feedback_generated"
+    COACHING_SESSION_STARTED = "coaching.session_started"
+    COACHING_SESSION_ENDED = "coaching.session_ended"
+    COACHING_INSIGHTS_GENERATED = "coaching.insights_generated"
+    COACHING_RECOMMENDATION_REQUESTED = "coaching.recommendation_requested"
+    
     # System events
     SERVICE_STARTED = "service.started"
     SERVICE_STOPPED = "service.stopped"
@@ -89,6 +96,7 @@ class EventSource(Enum):
     DATABASE = "database"
     FRONTEND = "frontend"
     GITHUB_WEBHOOK = "github_webhook"
+    COMMIT_QUALITY_COACHING = "commit_quality_coaching"
     SYSTEM = "system"
 
 

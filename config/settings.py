@@ -150,6 +150,7 @@ class ServiceSettings(BaseSettings):
     database_port: int = Field(default=8003, description="Database service port")
     frontend_port: int = Field(default=8000, description="Frontend service port")
     github_webhook_port: int = Field(default=8004, description="GitHub webhook service port")
+    commit_quality_coaching_port: int = Field(default=8005, description="Commit quality coaching service port")
     
     # Service timeouts
     request_timeout: int = Field(default=30, description="HTTP request timeout")
