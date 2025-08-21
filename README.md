@@ -345,33 +345,114 @@ docker-compose logs -f elasticsearch kibana
 
 ## 🧪 Testing
 
-### Unit Tests
+### Automated Test Suite
+
+We have implemented a comprehensive automated test suite with **100% code coverage** and **10/10 quality score** requirements.
+
+#### Quick Start
 
 ```bash
-# Run all tests
-pytest
+# Run the comprehensive test suite (recommended)
+python run_tests.py
 
-# Run specific service tests
-pytest tests/test_commit_tracker.py
-pytest tests/test_ai_analysis.py
-pytest tests/test_commit_quality_coaching.py
-
-# Coverage report
-pytest --cov=services --cov-report=html
+# Or run individual test components
+pytest --cov=. --cov-report=term-missing --cov-fail-under=100
 ```
 
-### Integration Tests
+#### Test Coverage
 
-```bash
-# Test with real services
-pytest tests/integration/ --docker-compose
+Our test suite covers:
+
+- **Unit Tests**: All business logic with mocked dependencies
+- **Integration Tests**: Service interactions and database operations
+- **CLI Tests**: Command-line interface functionality
+- **Model Tests**: Pydantic and SQLAlchemy model validation
+- **Event System Tests**: Event creation, serialization, and validation
+- **Database Tests**: Repository pattern and connection management
+- **Configuration Tests**: Settings validation and environment loading
+
+#### Test Files
+
+```
+tests/
+├── test_models.py                  # Data model tests
+├── test_events.py                  # Event system tests
+├── test_database.py                # Database layer tests
+├── test_config_settings.py         # Configuration tests
+└── test_cli_tools.py               # CLI tool tests
+
+services/
+├── commit_tracker/tests/
+│   └── test_main.py                # Commit tracker service tests
+└── commit_quality_coaching/tests/
+    └── test_main.py                # Coaching service tests
 ```
 
-### Load Testing
+#### Quality Checks
+
+The test suite includes:
+
+- **Code Coverage**: 100% requirement with detailed reporting
+- **Code Linting**: Flake8 with strict standards
+- **Type Checking**: MyPy with strict type validation
+- **Code Formatting**: Black formatting verification
+- **Quality Scoring**: 10/10 quality score requirement
+
+#### Running Specific Tests
 
 ```bash
-# Simulate high commit volume
-python scripts/load_test.py --commits=1000
+# Run all tests with coverage
+pytest --cov=. --cov-report=html --cov-report=term-missing
+
+# Run specific test modules
+pytest services/commit_tracker/tests/test_main.py -v
+pytest services/commit_quality_coaching/tests/test_main.py -v
+pytest tests/test_models.py -v
+
+# Run tests with specific markers
+pytest -m unit
+pytest -m integration
+pytest -m asyncio
+
+# Generate coverage reports
+pytest --cov=. --cov-report=html:htmlcov
+pytest --cov=. --cov-report=xml:coverage.xml
+```
+
+#### Test Results
+
+The test runner generates:
+
+- **Console Output**: Real-time test progress and results
+- **HTML Coverage Report**: Detailed coverage analysis in `htmlcov/`
+- **XML Coverage Report**: CI/CD integration in `coverage.xml`
+- **JSON Results**: Comprehensive test results in `test_results.json`
+
+#### Quality Gates
+
+Tests must pass all quality gates:
+
+- ✅ **100% Code Coverage**: All code paths tested
+- ✅ **10/10 Quality Score**: No errors, minimal warnings
+- ✅ **All Unit Tests Pass**: Zero test failures
+- ✅ **Linting Passes**: Code style compliance
+- ✅ **Type Checking Passes**: Type safety validation
+- ✅ **Formatting Passes**: Consistent code formatting
+
+#### Continuous Integration
+
+The test suite is designed for CI/CD integration:
+
+```yaml
+# Example GitHub Actions workflow
+- name: Run Tests
+  run: python run_tests.py
+
+- name: Upload Coverage
+  uses: codecov/codecov-action@v3
+  with:
+    file: ./coverage.xml
+    fail_ci_if_error: true
 ```
 
 ## 🚀 Deployment
@@ -380,10 +461,15 @@ python scripts/load_test.py --commits=1000
 
 ```bash
 # Local development
-python scripts/start_services.py
+python infrastructure/start_services.py
 
-# Hot reload
-python scripts/dev_server.py
+# Individual service development
+python services/commit_tracker/run.py
+python services/commit_quality_coaching/run.py
+
+# CLI tools
+python services/commit_tracker/cli.py track
+python services/commit_quality_coaching/cli.py coach abc123
 ```
 
 ### Production

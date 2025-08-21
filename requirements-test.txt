@@ -1,0 +1,33 @@
+# Testing Framework
+pytest>=7.4.0
+pytest-cov>=4.1.0
+pytest-asyncio>=0.21.0
+pytest-mock>=3.11.0
+pytest-xdist>=3.3.0
+
+# Coverage and Quality Tools
+coverage>=7.3.0
+black>=23.7.0
+flake8>=6.0.0
+mypy>=1.5.0
+isort>=5.12.0
+
+# Mocking and Testing Utilities
+responses>=0.23.0
+httpx>=0.24.0
+factory-boy>=3.3.0
+faker>=19.3.0
+
+# Database Testing
+pytest-postgresql>=4.1.0
+pytest-redis>=2.0.0
+
+# Async Testing
+asynctest>=0.13.0
+aioresponses>=0.7.0
+
+# Performance Testing
+pytest-benchmark>=4.0.0
+
+# Documentation Testing
+doctest-ignore-unicode>=0.1.2

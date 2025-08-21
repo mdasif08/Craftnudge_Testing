@@ -27,29 +27,55 @@ from sqlalchemy.dialects.postgresql import insert
 
 from config.settings import get_database_url, settings
 from shared.models import (
-    Base, CommitModel, AnalysisModel, BehaviorPatternModel, UserBehaviorModel,
-    Commit, Analysis, BehaviorPattern, UserBehavior,
-    ModelConverter, ModelValidator
+    Base,
+    CommitModel,
+    AnalysisModel,
+    BehaviorPatternModel,
+    UserBehaviorModel,
+    Commit,
+    Analysis,
+    BehaviorPattern,
+    UserBehavior,
+    ModelConverter,
+    ModelValidator,
 )
 
 logger = logging.getLogger(__name__)
 
 
+class DatabaseConfig:
+    """Database configuration class."""
+    
+    def __init__(self, url: str, pool_size: int = 10, max_overflow: int = 20):
+        self.url = url
+        self.pool_size = pool_size
+        self.max_overflow = max_overflow
+    
+    @classmethod
+    def from_settings(cls):
+        """Create DatabaseConfig from settings."""
+        return cls(
+            url=get_database_url(),
+            pool_size=settings.database.pool_size,
+            max_overflow=settings.database.max_overflow,
+        )
+
+
 class DatabaseManager:
     """Database connection and session management."""
-    
+
     def __init__(self):
         self.engine = None
         self.async_engine = None
         self.SessionLocal = None
         self.AsyncSessionLocal = None
         self._initialized = False
-    
+
     def initialize(self):
         """Initialize database connections."""
         if self._initialized:
             return
-        
+
         # Create synchronous engine for migrations and sync operations
         self.engine = create_engine(
             get_database_url(),
@@ -59,14 +85,11 @@ class DatabaseManager:
             pool_timeout=settings.database.pool_timeout,
             pool_recycle=settings.database.pool_recycle,
             echo=settings.database.echo,
-            connect_args={
-                "connect_timeout": 10,
-                "application_name": "craftnudge"
-            }
+            connect_args={"connect_timeout": 10, "application_name": "craftnudge"},
         )
-        
+
         # Create async engine for async operations
-        async_url = get_database_url().replace('postgresql://', 'postgresql+asyncpg://')
+        async_url = get_database_url().replace("postgresql://", "postgresql+asyncpg://")
         self.async_engine = create_async_engine(
             async_url,
             poolclass=QueuePool,
@@ -75,57 +98,48 @@ class DatabaseManager:
             pool_timeout=settings.database.pool_timeout,
             pool_recycle=settings.database.pool_recycle,
             echo=settings.database.echo,
-            connect_args={
-                "connect_timeout": 10,
-                "application_name": "craftnudge_async"
-            }
+            connect_args={"connect_timeout": 10, "application_name": "craftnudge_async"},
         )
-        
+
         # Create session factories
-        self.SessionLocal = sessionmaker(
-            autocommit=False,
-            autoflush=False,
-            bind=self.engine
-        )
-        
+        self.SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=self.engine)
+
         self.AsyncSessionLocal = async_sessionmaker(
-            self.async_engine,
-            class_=AsyncSession,
-            expire_on_commit=False
+            self.async_engine, class_=AsyncSession, expire_on_commit=False
         )
-        
+
         self._initialized = True
         logger.info("Database manager initialized successfully")
-    
+
     def create_tables(self):
         """Create all database tables."""
         if not self._initialized:
             self.initialize()
-        
+
         Base.metadata.create_all(bind=self.engine)
         logger.info("Database tables created successfully")
-    
+
     def drop_tables(self):
         """Drop all database tables."""
         if not self._initialized:
             self.initialize()
-        
+
         Base.metadata.drop_all(bind=self.engine)
         logger.info("Database tables dropped successfully")
-    
+
     def get_sync_session(self) -> Session:
         """Get a synchronous database session."""
         if not self._initialized:
             self.initialize()
-        
+
         return self.SessionLocal()
-    
+
     @asynccontextmanager
     async def get_async_session(self) -> AsyncGenerator[AsyncSession, None]:
         """Get an asynchronous database session."""
         if not self._initialized:
             self.initialize()
-        
+
         async with self.AsyncSessionLocal() as session:
             try:
                 yield session
@@ -135,14 +149,14 @@ class DatabaseManager:
                 raise
             finally:
                 await session.close()
-    
+
     async def health_check(self) -> Dict[str, Any]:
         """Perform database health check."""
         try:
             async with self.get_async_session() as session:
                 result = await session.execute(text("SELECT 1"))
                 result.fetchone()
-                
+
                 # Check connection pool status
                 pool_status = {
                     "pool_size": self.async_engine.pool.size(),
@@ -150,20 +164,16 @@ class DatabaseManager:
                     "checked_out": self.async_engine.pool.checkedout(),
                     "overflow": self.async_engine.pool.overflow(),
                 }
-                
+
                 return {
                     "status": "healthy",
                     "pool_status": pool_status,
-                    "timestamp": datetime.utcnow()
+                    "timestamp": datetime.utcnow(),
                 }
         except Exception as e:
             logger.error(f"Database health check failed: {e}")
-            return {
-                "status": "unhealthy",
-                "error": str(e),
-                "timestamp": datetime.utcnow()
-            }
-    
+            return {"status": "unhealthy", "error": str(e), "timestamp": datetime.utcnow()}
+
     def close(self):
         """Close database connections."""
         if self.engine:
@@ -190,6 +200,7 @@ async def get_async_db() -> AsyncSession:
 
 def database_transaction(func):
     """Decorator for database transaction management."""
+
     @wraps(func)
     async def wrapper(*args, **kwargs):
         async with db_manager.get_async_session() as session:
@@ -199,15 +210,16 @@ def database_transaction(func):
             except SQLAlchemyError as e:
                 logger.error(f"Database transaction failed: {e}")
                 raise
+
     return wrapper
 
 
 class BaseRepository:
     """Base repository class with common database operations."""
-    
+
     def __init__(self, model_class):
         self.model_class = model_class
-    
+
     @database_transaction
     async def create(self, data: Dict[str, Any], session: AsyncSession) -> Any:
         """Create a new record."""
@@ -223,7 +235,7 @@ class BaseRepository:
         except Exception as e:
             logger.error(f"Error creating {self.model_class.__name__}: {e}")
             raise
-    
+
     @database_transaction
     async def get_by_id(self, record_id: str, session: AsyncSession) -> Optional[Any]:
         """Get record by ID."""
@@ -235,13 +247,10 @@ class BaseRepository:
         except Exception as e:
             logger.error(f"Error getting {self.model_class.__name__} by ID: {e}")
             raise
-    
+
     @database_transaction
     async def get_all(
-        self, 
-        skip: int = 0, 
-        limit: int = 100, 
-        session: AsyncSession = None
+        self, skip: int = 0, limit: int = 100, session: AsyncSession = None
     ) -> List[Any]:
         """Get all records with pagination."""
         try:
@@ -255,13 +264,10 @@ class BaseRepository:
         except Exception as e:
             logger.error(f"Error getting all {self.model_class.__name__}: {e}")
             raise
-    
+
     @database_transaction
     async def update(
-        self, 
-        record_id: str, 
-        data: Dict[str, Any], 
-        session: AsyncSession
+        self, record_id: str, data: Dict[str, Any], session: AsyncSession
     ) -> Optional[Any]:
         """Update a record."""
         try:
@@ -278,7 +284,7 @@ class BaseRepository:
         except Exception as e:
             logger.error(f"Error updating {self.model_class.__name__}: {e}")
             raise
-    
+
     @database_transaction
     async def delete(self, record_id: str, session: AsyncSession) -> bool:
         """Delete a record."""
@@ -290,14 +296,12 @@ class BaseRepository:
         except Exception as e:
             logger.error(f"Error deleting {self.model_class.__name__}: {e}")
             raise
-    
+
     @database_transaction
     async def count(self, session: AsyncSession) -> int:
         """Get total count of records."""
         try:
-            result = await session.execute(
-                select(func.count(self.model_class.id))
-            )
+            result = await session.execute(select(func.count(self.model_class.id)))
             return result.scalar()
         except Exception as e:
             logger.error(f"Error counting {self.model_class.__name__}: {e}")
@@ -306,10 +310,10 @@ class BaseRepository:
 
 class CommitRepository(BaseRepository):
     """Repository for commit operations."""
-    
+
     def __init__(self):
         super().__init__(CommitModel)
-    
+
     @database_transaction
     async def get_by_hash(self, commit_hash: str, session: AsyncSession) -> Optional[CommitModel]:
         """Get commit by hash."""
@@ -321,14 +325,10 @@ class CommitRepository(BaseRepository):
         except Exception as e:
             logger.error(f"Error getting commit by hash: {e}")
             raise
-    
+
     @database_transaction
     async def get_by_author(
-        self, 
-        author: str, 
-        skip: int = 0, 
-        limit: int = 100, 
-        session: AsyncSession = None
+        self, author: str, skip: int = 0, limit: int = 100, session: AsyncSession = None
     ) -> List[CommitModel]:
         """Get commits by author."""
         try:
@@ -343,14 +343,10 @@ class CommitRepository(BaseRepository):
         except Exception as e:
             logger.error(f"Error getting commits by author: {e}")
             raise
-    
+
     @database_transaction
     async def get_by_repository(
-        self, 
-        repository: str, 
-        skip: int = 0, 
-        limit: int = 100, 
-        session: AsyncSession = None
+        self, repository: str, skip: int = 0, limit: int = 100, session: AsyncSession = None
     ) -> List[CommitModel]:
         """Get commits by repository."""
         try:
@@ -365,13 +361,10 @@ class CommitRepository(BaseRepository):
         except Exception as e:
             logger.error(f"Error getting commits by repository: {e}")
             raise
-    
+
     @database_transaction
     async def get_recent_commits(
-        self, 
-        days: int = 7, 
-        limit: int = 100, 
-        session: AsyncSession = None
+        self, days: int = 7, limit: int = 100, session: AsyncSession = None
     ) -> List[CommitModel]:
         """Get recent commits within specified days."""
         try:
@@ -386,36 +379,32 @@ class CommitRepository(BaseRepository):
         except Exception as e:
             logger.error(f"Error getting recent commits: {e}")
             raise
-    
+
     @database_transaction
     async def get_quality_stats(self, session: AsyncSession) -> Dict[str, Any]:
         """Get commit quality statistics."""
         try:
             # Average quality score
             avg_quality = await session.execute(
-                select(func.avg(CommitModel.quality_score))
-                .where(CommitModel.quality_score.isnot(None))
+                select(func.avg(CommitModel.quality_score)).where(
+                    CommitModel.quality_score.isnot(None)
+                )
             )
-            
+
             # Quality distribution
             quality_dist = await session.execute(
-                select(
-                    CommitModel.quality_level,
-                    func.count(CommitModel.id)
-                )
+                select(CommitModel.quality_level, func.count(CommitModel.id))
                 .where(CommitModel.quality_level.isnot(None))
                 .group_by(CommitModel.quality_level)
             )
-            
+
             # Total commits
-            total_commits = await session.execute(
-                select(func.count(CommitModel.id))
-            )
-            
+            total_commits = await session.execute(select(func.count(CommitModel.id)))
+
             return {
                 "average_quality": avg_quality.scalar() or 0.0,
                 "quality_distribution": dict(quality_dist.all()),
-                "total_commits": total_commits.scalar() or 0
+                "total_commits": total_commits.scalar() or 0,
             }
         except Exception as e:
             logger.error(f"Error getting quality stats: {e}")
@@ -424,15 +413,13 @@ class CommitRepository(BaseRepository):
 
 class AnalysisRepository(BaseRepository):
     """Repository for analysis operations."""
-    
+
     def __init__(self):
         super().__init__(AnalysisModel)
-    
+
     @database_transaction
     async def get_by_commit_id(
-        self, 
-        commit_id: str, 
-        session: AsyncSession
+        self, commit_id: str, session: AsyncSession
     ) -> Optional[AnalysisModel]:
         """Get analysis by commit ID."""
         try:
@@ -443,13 +430,9 @@ class AnalysisRepository(BaseRepository):
         except Exception as e:
             logger.error(f"Error getting analysis by commit ID: {e}")
             raise
-    
+
     @database_transaction
-    async def get_by_status(
-        self, 
-        status: str, 
-        session: AsyncSession
-    ) -> List[AnalysisModel]:
+    async def get_by_status(self, status: str, session: AsyncSession) -> List[AnalysisModel]:
         """Get analyses by status."""
         try:
             result = await session.execute(
@@ -459,34 +442,28 @@ class AnalysisRepository(BaseRepository):
         except Exception as e:
             logger.error(f"Error getting analyses by status: {e}")
             raise
-    
+
     @database_transaction
     async def get_analysis_stats(self, session: AsyncSession) -> Dict[str, Any]:
         """Get analysis statistics."""
         try:
             # Average quality score
-            avg_quality = await session.execute(
-                select(func.avg(AnalysisModel.quality_score))
-            )
-            
+            avg_quality = await session.execute(select(func.avg(AnalysisModel.quality_score)))
+
             # Average analysis duration
-            avg_duration = await session.execute(
-                select(func.avg(AnalysisModel.analysis_duration))
-            )
-            
+            avg_duration = await session.execute(select(func.avg(AnalysisModel.analysis_duration)))
+
             # Status distribution
             status_dist = await session.execute(
-                select(
-                    AnalysisModel.status,
-                    func.count(AnalysisModel.id)
+                select(AnalysisModel.status, func.count(AnalysisModel.id)).group_by(
+                    AnalysisModel.status
                 )
-                .group_by(AnalysisModel.status)
             )
-            
+
             return {
                 "average_quality": avg_quality.scalar() or 0.0,
                 "average_duration": avg_duration.scalar() or 0.0,
-                "status_distribution": dict(status_dist.all())
+                "status_distribution": dict(status_dist.all()),
             }
         except Exception as e:
             logger.error(f"Error getting analysis stats: {e}")
@@ -495,15 +472,13 @@ class AnalysisRepository(BaseRepository):
 
 class BehaviorPatternRepository(BaseRepository):
     """Repository for behavior pattern operations."""
-    
+
     def __init__(self):
         super().__init__(BehaviorPatternModel)
-    
+
     @database_transaction
     async def get_by_user_id(
-        self, 
-        user_id: str, 
-        session: AsyncSession
+        self, user_id: str, session: AsyncSession
     ) -> List[BehaviorPatternModel]:
         """Get behavior patterns by user ID."""
         try:
@@ -516,12 +491,10 @@ class BehaviorPatternRepository(BaseRepository):
         except Exception as e:
             logger.error(f"Error getting behavior patterns by user ID: {e}")
             raise
-    
+
     @database_transaction
     async def get_by_pattern_type(
-        self, 
-        pattern_type: str, 
-        session: AsyncSession
+        self, pattern_type: str, session: AsyncSession
     ) -> List[BehaviorPatternModel]:
         """Get behavior patterns by type."""
         try:
@@ -534,7 +507,7 @@ class BehaviorPatternRepository(BaseRepository):
         except Exception as e:
             logger.error(f"Error getting behavior patterns by type: {e}")
             raise
-    
+
     @database_transaction
     async def get_active_patterns(self, session: AsyncSession) -> List[BehaviorPatternModel]:
         """Get active behavior patterns."""
@@ -552,15 +525,13 @@ class BehaviorPatternRepository(BaseRepository):
 
 class UserBehaviorRepository(BaseRepository):
     """Repository for user behavior operations."""
-    
+
     def __init__(self):
         super().__init__(UserBehaviorModel)
-    
+
     @database_transaction
     async def get_by_user_id(
-        self, 
-        user_id: str, 
-        session: AsyncSession
+        self, user_id: str, session: AsyncSession
     ) -> Optional[UserBehaviorModel]:
         """Get user behavior by user ID."""
         try:
@@ -571,38 +542,33 @@ class UserBehaviorRepository(BaseRepository):
         except Exception as e:
             logger.error(f"Error getting user behavior by user ID: {e}")
             raise
-    
+
     @database_transaction
     async def upsert_user_behavior(
-        self, 
-        user_id: str, 
-        data: Dict[str, Any], 
-        session: AsyncSession
+        self, user_id: str, data: Dict[str, Any], session: AsyncSession
     ) -> UserBehaviorModel:
         """Upsert user behavior data."""
         try:
             # PostgreSQL upsert
             stmt = insert(UserBehaviorModel).values(
-                user_id=user_id,
-                **data,
-                last_updated=datetime.utcnow()
+                user_id=user_id, **data, last_updated=datetime.utcnow()
             )
-            
+
             stmt = stmt.on_conflict_do_update(
-                index_elements=['user_id'],
+                index_elements=["user_id"],
                 set_={
-                    'commit_frequency': stmt.excluded.commit_frequency,
-                    'average_commit_size': stmt.excluded.average_commit_size,
-                    'common_patterns': stmt.excluded.common_patterns,
-                    'improvement_areas': stmt.excluded.improvement_areas,
-                    'quality_trend': stmt.excluded.quality_trend,
-                    'last_updated': stmt.excluded.last_updated
-                }
+                    "commit_frequency": stmt.excluded.commit_frequency,
+                    "average_commit_size": stmt.excluded.average_commit_size,
+                    "common_patterns": stmt.excluded.common_patterns,
+                    "improvement_areas": stmt.excluded.improvement_areas,
+                    "quality_trend": stmt.excluded.quality_trend,
+                    "last_updated": stmt.excluded.last_updated,
+                },
             )
-            
+
             result = await session.execute(stmt)
             await session.flush()
-            
+
             # Get the updated record
             user_behavior = await self.get_by_user_id(user_id, session)
             return user_behavior
@@ -620,7 +586,7 @@ user_behavior_repo = UserBehaviorRepository()
 
 class DatabaseService:
     """High-level database service with business logic."""
-    
+
     @staticmethod
     async def store_commit(commit_data: Dict[str, Any]) -> Commit:
         """Store a new commit."""
@@ -628,17 +594,17 @@ class DatabaseService:
         errors = ModelValidator.validate_commit_data(commit_data)
         if errors:
             raise ValueError(f"Invalid commit data: {errors}")
-        
+
         # Check if commit already exists
-        existing_commit = await commit_repo.get_by_hash(commit_data['hash'])
+        existing_commit = await commit_repo.get_by_hash(commit_data["hash"])
         if existing_commit:
             logger.warning(f"Commit {commit_data['hash']} already exists")
             return ModelConverter.model_to_commit(existing_commit)
-        
+
         # Create commit
         commit_model = await commit_repo.create(commit_data)
         return ModelConverter.model_to_commit(commit_model)
-    
+
     @staticmethod
     async def store_analysis(analysis_data: Dict[str, Any]) -> Analysis:
         """Store a new analysis."""
@@ -646,32 +612,34 @@ class DatabaseService:
         errors = ModelValidator.validate_analysis_data(analysis_data)
         if errors:
             raise ValueError(f"Invalid analysis data: {errors}")
-        
+
         # Create analysis
         analysis_model = await analysis_repo.create(analysis_data)
         return ModelConverter.model_to_analysis(analysis_model)
-    
+
     @staticmethod
     async def get_commit_with_analysis(commit_id: str) -> Optional[Dict[str, Any]]:
         """Get commit with its analysis."""
         commit_model = await commit_repo.get_by_id(commit_id)
         if not commit_model:
             return None
-        
+
         analysis_model = await analysis_repo.get_by_commit_id(commit_id)
-        
+
         return {
             "commit": ModelConverter.model_to_commit(commit_model),
-            "analysis": ModelConverter.model_to_analysis(analysis_model) if analysis_model else None
+            "analysis": (
+                ModelConverter.model_to_analysis(analysis_model) if analysis_model else None
+            ),
         }
-    
+
     @staticmethod
     async def get_user_behavior_summary(user_id: str) -> Optional[UserBehavior]:
         """Get user behavior summary."""
         user_behavior_model = await user_behavior_repo.get_by_user_id(user_id)
         if not user_behavior_model:
             return None
-        
+
         # Convert to Pydantic model
         return UserBehavior(
             user_id=user_behavior_model.user_id,
@@ -680,16 +648,14 @@ class DatabaseService:
             common_patterns=user_behavior_model.common_patterns,
             improvement_areas=user_behavior_model.improvement_areas,
             quality_trend=user_behavior_model.quality_trend,
-            last_updated=user_behavior_model.last_updated
+            last_updated=user_behavior_model.last_updated,
         )
-    
+
     @staticmethod
     async def update_user_behavior(user_id: str, behavior_data: Dict[str, Any]) -> UserBehavior:
         """Update user behavior data."""
-        user_behavior_model = await user_behavior_repo.upsert_user_behavior(
-            user_id, behavior_data
-        )
-        
+        user_behavior_model = await user_behavior_repo.upsert_user_behavior(user_id, behavior_data)
+
         return UserBehavior(
             user_id=user_behavior_model.user_id,
             commit_frequency=user_behavior_model.commit_frequency,
@@ -697,7 +663,7 @@ class DatabaseService:
             common_patterns=user_behavior_model.common_patterns,
             improvement_areas=user_behavior_model.improvement_areas,
             quality_trend=user_behavior_model.quality_trend,
-            last_updated=user_behavior_model.last_updated
+            last_updated=user_behavior_model.last_updated,
         )
 
 
@@ -723,8 +689,18 @@ async def get_database_health() -> Dict[str, Any]:
 
 # Export commonly used functions and classes
 __all__ = [
-    'DatabaseManager', 'BaseRepository', 'CommitRepository', 'AnalysisRepository',
-    'BehaviorPatternRepository', 'UserBehaviorRepository', 'DatabaseService',
-    'get_db', 'get_async_db', 'database_transaction', 'init_database',
-    'close_database', 'get_database_health', 'db_manager'
+    "DatabaseManager",
+    "BaseRepository",
+    "CommitRepository",
+    "AnalysisRepository",
+    "BehaviorPatternRepository",
+    "UserBehaviorRepository",
+    "DatabaseService",
+    "get_db",
+    "get_async_db",
+    "database_transaction",
+    "init_database",
+    "close_database",
+    "get_database_health",
+    "db_manager",
 ]
